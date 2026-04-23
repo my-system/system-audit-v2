@@ -1,35 +1,45 @@
 "use client";
-import { useState } from "react";
-import { transactions } from "@/data/dummy";
+import { useState, useMemo } from "react";
+import { useDashboardData } from "@/hooks/use-dashboard";
 import { RiskBadge } from "@/components/ui/risk-badge";
 import { formatCurrency, cn } from "@/lib/utils";
-import { Search, Download, Eye, FolderOpen, ChevronUp, ChevronDown, Filter } from "lucide-react";
+import { Search, Download, Eye, FolderOpen, ChevronUp, ChevronDown, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Transaction } from "@/types";
 
+const PAGE_SIZE = 20;
+
 export function TabTransactions() {
+  const { filteredTransactions } = useDashboardData();
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [sortField, setSortField] = useState<keyof Transaction>("timestamp");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [page, setPage] = useState(0);
 
-  const filtered = transactions
-    .filter(t =>
-      (riskFilter === "all" || t.riskLevel === riskFilter) &&
-      (search === "" || t.id.toLowerCase().includes(search.toLowerCase()) ||
-        t.senderName.toLowerCase().includes(search.toLowerCase()) ||
-        t.receiverName.toLowerCase().includes(search.toLowerCase()) ||
-        t.location.toLowerCase().includes(search.toLowerCase()))
-    )
-    .sort((a, b) => {
-      const av = a[sortField] as any;
-      const bv = b[sortField] as any;
-      return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
-    });
+  const filtered = useMemo(() => {
+    return filteredTransactions
+      .filter(t =>
+        (riskFilter === "all" || t.riskLevel === riskFilter) &&
+        (search === "" || t.id.toLowerCase().includes(search.toLowerCase()) ||
+          t.senderName.toLowerCase().includes(search.toLowerCase()) ||
+          t.receiverName.toLowerCase().includes(search.toLowerCase()) ||
+          t.location.toLowerCase().includes(search.toLowerCase()))
+      )
+      .sort((a, b) => {
+        const av = a[sortField] as any;
+        const bv = b[sortField] as any;
+        return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+      });
+  }, [filteredTransactions, riskFilter, search, sortField, sortDir]);
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const handleSort = (f: keyof Transaction) => {
     if (f === sortField) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortField(f); setSortDir("desc"); }
+    setPage(0);
   };
 
   const SortIcon = ({ field }: { field: keyof Transaction }) =>
@@ -45,7 +55,7 @@ export function TabTransactions() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#475569]" />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(0); }}
             placeholder="Cari ID, sender, receiver, lokasi..."
             className="w-full pl-9 pr-4 py-2 rounded-xl text-xs bg-[#111827] border border-[#1e2d45] text-[#94a3b8] placeholder-[#475569] focus:outline-none focus:border-cyan-500/50 transition-all"
           />
@@ -55,7 +65,7 @@ export function TabTransactions() {
           {["all", "critical", "high", "medium", "low"].map(r => (
             <button
               key={r}
-              onClick={() => setRiskFilter(r)}
+              onClick={() => { setRiskFilter(r); setPage(0); }}
               className={cn(
                 "px-3 py-1.5 rounded-xl text-xs font-medium transition-all",
                 riskFilter === r
@@ -79,6 +89,12 @@ export function TabTransactions() {
         <span className="text-red-400 font-medium">{filtered.filter(t => t.riskLevel === "critical").length} critical</span>
         <span>•</span>
         <span className="text-orange-400 font-medium">{filtered.filter(t => t.riskLevel === "high").length} high</span>
+        {totalPages > 1 && (
+          <>
+            <span>•</span>
+            <span className="text-[#94a3b8]">Halaman {page + 1}/{totalPages}</span>
+          </>
+        )}
       </div>
 
       {/* Table */}
@@ -108,7 +124,7 @@ export function TabTransactions() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((tx) => (
+              {paged.map((tx) => (
                 <tr
                   key={tx.id}
                   className="cursor-pointer"
@@ -169,6 +185,45 @@ export function TabTransactions() {
         </div>
       </div>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="p-2 rounded-lg bg-[#111827] border border-[#1e2d45] text-[#64748b] hover:text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+            const start = Math.max(0, Math.min(page - 2, totalPages - 5));
+            const pageNum = start + i;
+            if (pageNum >= totalPages) return null;
+            return (
+              <button
+                key={pageNum}
+                onClick={() => setPage(pageNum)}
+                className={cn(
+                  "w-8 h-8 rounded-lg text-xs font-medium transition-all",
+                  page === pageNum
+                    ? "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
+                    : "bg-[#111827] border border-[#1e2d45] text-[#64748b] hover:text-[#94a3b8]"
+                )}
+              >
+                {pageNum + 1}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="p-2 rounded-lg bg-[#111827] border border-[#1e2d45] text-[#64748b] hover:text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Detail Drawer */}
       {selectedTx && (
         <div className="rounded-2xl border border-cyan-500/20 bg-[#111827] p-5 animate-fadeIn">
@@ -190,8 +245,12 @@ export function TabTransactions() {
               { label: "Timestamp", value: selectedTx.timestamp },
               { label: "Lokasi", value: selectedTx.location },
               { label: "Risk Score", value: `${selectedTx.riskScore}/10` },
-              { label: "Z-Score", value: selectedTx.zScore?.toFixed(2) ?? "N/A" },
+              { label: "Z-Score", value: selectedTx.zScore.toFixed(2) },
               { label: "Metode Deteksi", value: selectedTx.method.toUpperCase() },
+              { label: "Circular Flow", value: selectedTx.isCircular ? "Ya" : "Tidak" },
+              { label: "Dormant Reactivation", value: selectedTx.isDormantReactivation ? "Ya" : "Tidak" },
+              { label: "Velocity Alert", value: selectedTx.isVelocityAlert ? "Ya" : "Tidak" },
+              { label: "Flagged", value: selectedTx.isFlagged ? "Ya" : "Tidak" },
             ].map(({ label, value }) => (
               <div key={label} className="bg-[#0d1626] rounded-xl p-3">
                 <p className="text-[10px] text-[#475569] uppercase tracking-wider mb-1">{label}</p>

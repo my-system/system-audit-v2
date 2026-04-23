@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { graphNodes, graphEdges } from "@/data/dummy";
+import { useEffect, useRef, useState, useMemo } from "react";
+import { useDashboardData } from "@/hooks/use-dashboard";
 import { formatCurrency, cn } from "@/lib/utils";
 import { RiskBadge } from "@/components/ui/risk-badge";
-import { Network, GitBranch, AlertTriangle, TrendingUp, RefreshCw, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
+import { Network, GitBranch, AlertTriangle, TrendingUp, RefreshCw, Maximize2 } from "lucide-react";
+import type { GraphNode, GraphEdge } from "@/types";
 
 const RISK_COLOR: Record<string, string> = {
   critical: "#ef4444", high: "#f59e0b", medium: "#eab308", low: "#10b981"
@@ -13,11 +14,20 @@ const RISK_GLOW: Record<string, string> = {
 };
 
 export function TabGraph() {
+  const { graphData, circularFlows } = useDashboardData();
+  const graphNodes = graphData.nodes;
+  const graphEdges = graphData.edges;
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [selectedNode, setSelectedNode] = useState<typeof graphNodes[0] | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const animRef = useRef<number>(0);
   const nodePositions = useRef<Map<string, { x: number; y: number; vx: number; vy: number }>>(new Map());
+
+  const metrics = useMemo(() => ({
+    totalNodes: graphNodes.length,
+    totalEdges: graphEdges.length,
+    suspiciousNodes: graphNodes.filter((n: GraphNode) => n.risk === "critical" || n.risk === "high").length,
+    circularFlowsCount: circularFlows.length,
+  }), [graphNodes, graphEdges, circularFlows]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -27,7 +37,7 @@ export function TabGraph() {
 
     // Initialize positions
     const W = canvas.width, H = canvas.height;
-    graphNodes.forEach((node, i) => {
+    graphNodes.forEach((node: GraphNode, i: number) => {
       if (!nodePositions.current.has(node.id)) {
         const angle = (i / graphNodes.length) * Math.PI * 2;
         const r = Math.min(W, H) * 0.3;
@@ -55,9 +65,9 @@ export function TabGraph() {
       }
 
       // Force simulation (simple)
-      graphNodes.forEach(n1 => {
+      graphNodes.forEach((n1: GraphNode) => {
         const p1 = nodePositions.current.get(n1.id)!;
-        graphNodes.forEach(n2 => {
+        graphNodes.forEach((n2: GraphNode) => {
           if (n1.id === n2.id) return;
           const p2 = nodePositions.current.get(n2.id)!;
           const dx = p1.x - p2.x, dy = p1.y - p2.y;
@@ -75,7 +85,7 @@ export function TabGraph() {
       });
 
       // Spring forces for edges
-      graphEdges.forEach(e => {
+      graphEdges.forEach((e: GraphEdge) => {
         const p1 = nodePositions.current.get(e.source);
         const p2 = nodePositions.current.get(e.target);
         if (!p1 || !p2) return;
@@ -89,12 +99,12 @@ export function TabGraph() {
       });
 
       // Draw edges
-      graphEdges.forEach(e => {
+      graphEdges.forEach((e: GraphEdge) => {
         const p1 = nodePositions.current.get(e.source);
         const p2 = nodePositions.current.get(e.target);
         if (!p1 || !p2) return;
-        const srcNode = graphNodes.find(n => n.id === e.source)!;
-        const isCircular = graphEdges.some(rev => rev.source === e.target && rev.target === e.source);
+        const srcNode = graphNodes.find((n: GraphNode) => n.id === e.source)!;
+        const isCircular = graphEdges.some((rev: GraphEdge) => rev.source === e.target && rev.target === e.source);
 
         const grad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
         const c1 = RISK_COLOR[srcNode.risk];
@@ -125,7 +135,7 @@ export function TabGraph() {
       });
 
       // Draw nodes
-      graphNodes.forEach(node => {
+      graphNodes.forEach((node: GraphNode) => {
         const pos = nodePositions.current.get(node.id)!;
         const r = 14 + node.connections * 1.5;
         const color = RISK_COLOR[node.risk];
@@ -198,17 +208,17 @@ export function TabGraph() {
       cancelAnimationFrame(animRef.current);
       canvas.removeEventListener("click", handleClick);
     };
-  }, []);
+  }, [graphNodes, graphEdges]);
 
   return (
     <div className="space-y-4 animate-fadeIn">
       {/* Metrics Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { icon: Network, label: "Total Nodes", value: "2,142", color: "text-cyan-400", bg: "bg-cyan-500/10" },
-          { icon: GitBranch, label: "Total Edges", value: "8,933", color: "text-blue-400", bg: "bg-blue-500/10" },
-          { icon: AlertTriangle, label: "Suspicious Nodes", value: "34", color: "text-red-400", bg: "bg-red-500/10" },
-          { icon: TrendingUp, label: "Circular Flows", value: "12", color: "text-orange-400", bg: "bg-orange-500/10" },
+          { icon: Network, label: "Total Nodes", value: metrics.totalNodes.toLocaleString(), color: "text-cyan-400", bg: "bg-cyan-500/10" },
+          { icon: GitBranch, label: "Total Edges", value: metrics.totalEdges.toLocaleString(), color: "text-blue-400", bg: "bg-blue-500/10" },
+          { icon: AlertTriangle, label: "Suspicious Nodes", value: metrics.suspiciousNodes.toLocaleString(), color: "text-red-400", bg: "bg-red-500/10" },
+          { icon: TrendingUp, label: "Circular Flows", value: metrics.circularFlowsCount.toLocaleString(), color: "text-orange-400", bg: "bg-orange-500/10" },
         ].map(({ icon: Icon, label, value, color, bg }) => (
           <div key={label} className="rounded-2xl border border-[#1e2d45] bg-[#111827] p-4 flex items-center gap-3">
             <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center", bg)}>
@@ -278,23 +288,23 @@ export function TabGraph() {
           <h3 className="text-sm font-semibold text-[#e2e8f0]">Circular Flow Paths Terdeteksi</h3>
         </div>
         <div className="p-4 space-y-2">
-          {[
-            { path: "U001 → U099 → U001", amount: "Rp 898jt", time: "09:00–09:30", duration: "30 mnt", risk: "critical" },
-            { path: "U045 → U009 → U034 → U045", amount: "Rp 648jt", time: "10:45–11:45", duration: "60 mnt", risk: "critical" },
-            { path: "U070 → U043 → U059 → U070", amount: "Rp 943jt", time: "02:14–03:22", duration: "68 mnt", risk: "critical" },
-          ].map((flow, i) => (
-            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-[#0d1626] border border-orange-500/10 hover:border-orange-500/30 transition-all">
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-sm text-orange-400">{flow.path}</span>
+          {circularFlows.length === 0 ? (
+            <div className="text-center py-8 text-xs text-[#64748b]">Tidak ada circular flow terdeteksi</div>
+          ) : (
+            circularFlows.map((flow, i) => (
+              <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-[#0d1626] border border-orange-500/10 hover:border-orange-500/30 transition-all">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-sm text-orange-400">{flow.pathLabel}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-xs font-semibold text-[#e2e8f0]">{formatCurrency(flow.amount)}</span>
+                  <span className="text-xs text-[#64748b]">{flow.durationMinutes} mnt</span>
+                  <span className="text-[10px] font-mono text-[#475569]">{flow.startTime}–{flow.endTime}</span>
+                  <RiskBadge value={flow.risk} />
+                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="text-xs font-semibold text-[#e2e8f0]">{flow.amount}</span>
-                <span className="text-xs text-[#64748b]">{flow.duration}</span>
-                <span className="text-[10px] font-mono text-[#475569]">{flow.time}</span>
-                <RiskBadge value={flow.risk} />
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

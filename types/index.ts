@@ -3,6 +3,7 @@ export type TxStatus = "flagged" | "clear" | "investigating" | "resolved";
 export type CaseStatus = "open" | "investigating" | "escalated" | "closed";
 export type UserRole = "admin" | "auditor" | "analyst" | "viewer";
 export type DetectionMethod = "z-score" | "iqr" | "isolation-forest" | "circular" | "cluster" | "hybrid";
+export type DateRange = "today" | "7d" | "30d" | "90d";
 
 export interface Transaction {
   id: string;
@@ -17,7 +18,11 @@ export interface Transaction {
   riskLevel: RiskLevel;
   status: TxStatus;
   method: DetectionMethod;
-  zScore?: number;
+  zScore: number;
+  isFlagged: boolean;
+  isCircular: boolean;
+  isDormantReactivation: boolean;
+  isVelocityAlert: boolean;
 }
 
 export interface Alert {
@@ -48,14 +53,22 @@ export interface Case {
   location: string;
 }
 
-export interface KPICard {
-  label: string;
-  value: string | number;
-  change: number;
-  changeType: "increase" | "decrease" | "neutral";
-  icon: string;
-  color: "cyan" | "green" | "orange" | "red" | "purple";
-  suffix?: string;
+export interface KPIStats {
+  totalTransactions: number;
+  totalAlerts: number;
+  totalAmount: number;
+  uniqueUsers: number;
+  avgAmount: number;
+  fraudRate: number;
+  systemHealth: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  prevTotalTransactions: number;
+  prevTotalAlerts: number;
+  prevTotalAmount: number;
+  prevUniqueUsers: number;
 }
 
 export interface ChartDataPoint {
@@ -64,6 +77,25 @@ export interface ChartDataPoint {
   alerts: number;
   amount: number;
   fraud: number;
+}
+
+export interface HourlyDataPoint {
+  hour: string;
+  transactions: number;
+  alerts: number;
+}
+
+export interface LocationDataPoint {
+  location: string;
+  transactions: number;
+  alerts: number;
+  amount: number;
+}
+
+export interface RiskDistributionPoint {
+  name: string;
+  value: number;
+  color: string;
 }
 
 export interface GraphNode {
@@ -81,6 +113,41 @@ export interface GraphEdge {
   timestamp: string;
 }
 
+export interface CircularFlow {
+  path: string[];
+  pathLabel: string;
+  amount: number;
+  startTime: string;
+  endTime: string;
+  durationMinutes: number;
+  risk: RiskLevel;
+}
+
+export interface AIInsight {
+  id: number;
+  type: RiskLevel;
+  icon: string;
+  title: string;
+  summary: string;
+  confidence: number;
+  action: string;
+  tags: string[];
+}
+
+export interface AIRecommendation {
+  icon: string;
+  label: string;
+  desc: string;
+  severity: RiskLevel;
+  count: number | null;
+}
+
+export interface ExplainabilityFactor {
+  factor: string;
+  weight: number;
+  color: string;
+}
+
 export interface ActivityFeedItem {
   id: string;
   time: string;
@@ -89,11 +156,20 @@ export interface ActivityFeedItem {
   severity?: RiskLevel;
 }
 
-export interface GlobalFilters {
-  dateRange: "today" | "7d" | "30d" | "90d" | "custom";
+export interface FilterState {
+  dateRange: DateRange;
   riskLevel: RiskLevel | "all";
   location: string;
-  amountMin: number;
-  amountMax: number;
-  detectionMethod: DetectionMethod | "all";
+  selectedMethod: DetectionMethod | "all";
+  threshold: number;
+}
+
+export interface KPICard {
+  label: string;
+  value: string | number;
+  change: number;
+  changeType: "increase" | "decrease" | "neutral";
+  icon: string;
+  color: "cyan" | "green" | "orange" | "red" | "purple";
+  suffix?: string;
 }

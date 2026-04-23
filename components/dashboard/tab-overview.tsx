@@ -1,18 +1,10 @@
 "use client";
+import { useMemo } from "react";
 import { KPICard } from "@/components/ui/kpi-card";
 import { RiskBadge } from "@/components/ui/risk-badge";
-import { activityFeed } from "@/data/dummy";
+import { useDashboardData } from "@/hooks/use-dashboard";
 import { formatCurrency, cn } from "@/lib/utils";
-import { Play, Upload, FileText, SlidersHorizontal, AlertTriangle, CheckCircle2, Info } from "lucide-react";
-
-const kpis = [
-  { label: "Total Transaksi", value: "1,247", change: 12.3, changeType: "increase" as const, icon: "activity", color: "cyan" as const, subtitle: "Hari ini" },
-  { label: "Alerts Hari Ini", value: "24", change: 37.1, changeType: "increase" as const, icon: "alert", color: "red" as const, subtitle: "8 belum ditinjau" },
-  { label: "Amount Monitored", value: "Rp 48.7M", change: 8.5, changeType: "increase" as const, icon: "dollar", color: "green" as const, subtitle: "Total hari ini" },
-  { label: "Unique Users", value: "387", change: -2.1, changeType: "decrease" as const, icon: "users", color: "purple" as const, subtitle: "Aktif hari ini" },
-  { label: "System Health", value: "99.8%", icon: "shield", color: "green" as const, subtitle: "All systems operational" },
-  { label: "AI Engine", value: "Active", icon: "cpu", color: "cyan" as const, subtitle: "Hybrid mode — 6 detectors" },
-];
+import { Play, Upload, FileText, SlidersHorizontal, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 const quickActions = [
   { icon: Play, label: "Run Audit", color: "bg-cyan-500 hover:bg-cyan-400", textColor: "text-white" },
@@ -31,11 +23,44 @@ const feedIcons: Record<string, { icon: typeof AlertTriangle; color: string }> =
 };
 
 export function TabOverview() {
+  const { kpis, activityFeed } = useDashboardData();
+
+  const kpiCards = useMemo(() => {
+    const txChange = kpis.prevTotalTransactions > 0
+      ? Math.round(((kpis.totalTransactions - kpis.prevTotalTransactions) / kpis.prevTotalTransactions) * 1000) / 10
+      : 0;
+    const alertChange = kpis.prevTotalAlerts > 0
+      ? Math.round(((kpis.totalAlerts - kpis.prevTotalAlerts) / kpis.prevTotalAlerts) * 1000) / 10
+      : 0;
+    const amountChange = kpis.prevTotalAmount > 0
+      ? Math.round(((kpis.totalAmount - kpis.prevTotalAmount) / kpis.prevTotalAmount) * 1000) / 10
+      : 0;
+    const userChange = kpis.prevUniqueUsers > 0
+      ? Math.round(((kpis.uniqueUsers - kpis.prevUniqueUsers) / kpis.prevUniqueUsers) * 1000) / 10
+      : 0;
+
+    return [
+      { label: "Total Transaksi", value: kpis.totalTransactions.toLocaleString(), change: txChange, changeType: txChange >= 0 ? "increase" as const : "decrease" as const, icon: "activity", color: "cyan" as const, subtitle: `${kpis.fraudRate.toFixed(1)}% fraud rate` },
+      { label: "Alerts Aktif", value: kpis.totalAlerts.toLocaleString(), change: alertChange, changeType: alertChange >= 0 ? "increase" as const : "decrease" as const, icon: "alert", color: "red" as const, subtitle: `${kpis.criticalCount} critical` },
+      { label: "Amount Monitored", value: formatCurrency(kpis.totalAmount), change: amountChange, changeType: amountChange >= 0 ? "increase" as const : "decrease" as const, icon: "dollar", color: "green" as const, subtitle: `Avg ${formatCurrency(kpis.avgAmount)}` },
+      { label: "Unique Users", value: kpis.uniqueUsers.toLocaleString(), change: userChange, changeType: userChange >= 0 ? "increase" as const : "decrease" as const, icon: "users", color: "purple" as const, subtitle: "Aktif terdeteksi" },
+      { label: "System Health", value: `${kpis.systemHealth}%`, icon: "shield", color: "green" as const, subtitle: "All systems operational" },
+      { label: "AI Engine", value: "Active", icon: "cpu", color: "cyan" as const, subtitle: "Hybrid mode — 6 detectors" },
+    ];
+  }, [kpis]);
+
+  const alertSummary = useMemo(() => [
+    { level: "critical", count: kpis.criticalCount, label: "Critical Alerts", desc: "Butuh tindakan segera", color: "border-red-500/30 bg-red-500/5" },
+    { level: "high", count: kpis.highCount, label: "High Alerts", desc: "Perlu investigasi", color: "border-orange-500/30 bg-orange-500/5" },
+    { level: "medium", count: kpis.mediumCount, label: "Medium Alerts", desc: "Dalam pemantauan", color: "border-yellow-500/30 bg-yellow-500/5" },
+    { level: "low", count: kpis.lowCount, label: "Low Alerts", desc: "Sudah ditinjau", color: "border-emerald-500/30 bg-emerald-500/5" },
+  ], [kpis]);
+
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        {kpis.map((k) => (
+        {kpiCards.map((k) => (
           <KPICard key={k.label} {...k} />
         ))}
       </div>
@@ -86,7 +111,7 @@ export function TabOverview() {
               </span>
               <h3 className="text-xs font-semibold text-[#e2e8f0]">Live Activity Feed</h3>
             </div>
-            <span className="text-[10px] text-[#475569]">Auto-refresh 30s</span>
+            <span className="text-[10px] text-[#475569]">{activityFeed.length} events</span>
           </div>
           <div className="overflow-y-auto max-h-[320px]">
             {activityFeed.map((item, i) => {
@@ -117,12 +142,7 @@ export function TabOverview() {
 
       {/* Alert Summary Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        {[
-          { level: "critical", count: 4, label: "Critical Alerts", desc: "Butuh tindakan segera", color: "border-red-500/30 bg-red-500/5" },
-          { level: "high", count: 8, label: "High Alerts", desc: "Perlu investigasi", color: "border-orange-500/30 bg-orange-500/5" },
-          { level: "medium", count: 7, label: "Medium Alerts", desc: "Dalam pemantauan", color: "border-yellow-500/30 bg-yellow-500/5" },
-          { level: "low", count: 5, label: "Low Alerts", desc: "Sudah ditinjau", color: "border-emerald-500/30 bg-emerald-500/5" },
-        ].map(({ level, count, label, desc, color }) => (
+        {alertSummary.map(({ level, count, label, desc, color }) => (
           <div key={level} className={cn("rounded-2xl border p-4 flex items-center gap-4", color)}>
             <div className="text-2xl font-bold text-[#e2e8f0]">{count}</div>
             <div>

@@ -1,14 +1,13 @@
 "use client";
+import { useMemo } from "react";
 import { ChartCard } from "@/components/ui/chart-card";
-import { last30DaysData, hourlyData, riskDistribution, locationData } from "@/data/dummy";
+import { useDashboardData } from "@/hooks/use-dashboard";
 import { formatCurrency } from "@/lib/utils";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer
 } from "recharts";
-
-const COLORS = { cyan: "#06b6d4", red: "#ef4444", orange: "#f59e0b", green: "#10b981", purple: "#a855f7" };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -26,15 +25,18 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-const last14 = last30DaysData.slice(-14).map(d => ({ ...d, date: d.date.slice(5) }));
-const last7hourly = hourlyData.filter((_, i) => i % 2 === 0);
-
 export function TabAnalytics() {
+  const { dailyTrend, hourlyTrend, riskDistribution, locationData } = useDashboardData();
+
+  const last14 = useMemo(() => dailyTrend.slice(-14).map(d => ({ ...d, date: d.date.slice(5) })), [dailyTrend]);
+  const hourlyEvery2 = useMemo(() => hourlyTrend.filter((_, i) => i % 2 === 0), [hourlyTrend]);
+  const amountTrend = useMemo(() => dailyTrend.map(d => ({ ...d, date: d.date.slice(5), amountM: Math.round(d.amount / 1_000_000) })), [dailyTrend]);
+
   return (
     <div className="space-y-4 animate-fadeIn">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Daily Transaction Trend */}
-        <ChartCard title="Tren Transaksi Harian" subtitle="14 hari terakhir" height="h-[260px]">
+        <ChartCard title="Tren Transaksi Harian" subtitle={`${dailyTrend.length} hari terakhir`} height="h-[260px]">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={last14}>
               <defs>
@@ -59,7 +61,7 @@ export function TabAnalytics() {
         </ChartCard>
 
         {/* Risk Distribution Pie */}
-        <ChartCard title="Distribusi Risiko" subtitle="Hari ini" height="h-[260px]">
+        <ChartCard title="Distribusi Risiko" subtitle="Berdasarkan filter aktif" height="h-[260px]">
           <div className="flex h-full items-center gap-4">
             <ResponsiveContainer width="55%" height="100%">
               <PieChart>
@@ -94,9 +96,9 @@ export function TabAnalytics() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Hourly Activity */}
-        <ChartCard title="Aktivitas per Jam" subtitle="Hari ini" height="h-[240px]">
+        <ChartCard title="Aktivitas per Jam" subtitle="Distribusi 24 jam" height="h-[240px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={last7hourly} barSize={14}>
+            <BarChart data={hourlyEvery2} barSize={14}>
               <CartesianGrid strokeDasharray="3 3" stroke="#1e2d45" />
               <XAxis dataKey="hour" tick={{ fill: "#475569", fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: "#475569", fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -111,7 +113,7 @@ export function TabAnalytics() {
         <ChartCard title="Top Lokasi Transaksi" subtitle="Volume tertinggi" height="h-[240px]">
           <div className="space-y-2.5 h-full overflow-y-auto pr-1">
             {locationData.map((loc, i) => {
-              const maxTx = locationData[0].transactions;
+              const maxTx = locationData[0]?.transactions || 1;
               const pct = Math.round((loc.transactions / maxTx) * 100);
               return (
                 <div key={loc.location}>
@@ -139,9 +141,9 @@ export function TabAnalytics() {
       </div>
 
       {/* Amount Trend */}
-      <ChartCard title="Nominal Transaksi Harian" subtitle="30 hari terakhir (Rp)" height="h-[220px]">
+      <ChartCard title="Nominal Transaksi Harian" subtitle={`${dailyTrend.length} hari terakhir (Rp)`} height="h-[220px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={last30DaysData.map(d => ({ ...d, date: d.date.slice(5), amountM: Math.round(d.amount / 1_000_000) }))}>
+          <LineChart data={amountTrend}>
             <defs>
               <linearGradient id="amountGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
